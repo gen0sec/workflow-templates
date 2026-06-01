@@ -73,8 +73,28 @@ jobs:
 
       # ----- main publish below this point -----
 
-      - name: Configure AWS CLI for R2
+      # GitHub Actions doesn't allow `secrets.X` in `if:` expressions,
+      # so we expose the account id as an env var and check it in a
+      # gating step. Missing R2_* secrets emit a warning (visible in
+      # the run summary) instead of failing CI — a fresh clone of
+      # this repo, or a rotation in progress, shouldn't paint the
+      # branch red.
+      - name: Check R2 secrets
         if: github.event_name != 'pull_request'
+        id: r2_secrets
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=R2 secrets not configured::Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET under Settings -> Secrets and variables -> Actions. Validate + manifest build ran; upload skipped."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS CLI for R2
+        if: github.event_name != 'pull_request' && steps.r2_secrets.outputs.configured == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -84,7 +104,7 @@ jobs:
           aws --version
 
       - name: Upload templates + manifest to R2
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.r2_secrets.outputs.configured == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
