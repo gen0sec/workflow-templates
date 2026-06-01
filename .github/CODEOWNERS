@@ -1,0 +1,26 @@
+# Code ownership rules for the public template catalog.
+#
+# Gen0Sec-curated content (system tier) is shipped pre-installed for
+# every tenant and lives at templates/system/. Community submissions
+# (custom tier) live at templates/custom/ and require maintainer
+# review but are not pre-installed.
+#
+# The branch ruleset on `main` requires Code Owner review (see
+# `gh api repos/gen0sec/workflow-templates/rulesets`), so the paths
+# listed below cannot merge without an approving review from a member
+# of @gen0sec/developers — even if a regular reviewer has already
+# approved the PR.
+
+# Default: any maintainer can approve community PRs touching custom/
+# templates or docs.
+*                           @gen0sec/developers
+
+# System tier — Gen0Sec-curated. The branch ruleset enforces Code
+# Owner review on these paths.
+/templates/system/          @gen0sec/developers
+
+# Build + sync plumbing — protected to keep the R2 publish path
+# trusted. A compromised CI script could ship arbitrary content
+# under any tier.
+/scripts/                   @gen0sec/developers
+/.github/                   @gen0sec/developers

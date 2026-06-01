@@ -1,0 +1,45 @@
+# Third layer of the user-vs-system separation. CODEOWNERS (with the
+# branch ruleset's "require Code Owner review" rule) is the first +
+# second layers; this guard catches the case where a community PR
+# touches `templates/system/**` and fails the PR check status before
+# a reviewer has to notice.
+#
+# Author membership is checked against the `gen0sec` org. Org members
+# can write to system/; non-members cannot. Tightening to a smaller
+# maintainers team is a follow-up (change `org_member` to a team
+# membership lookup against `@gen0sec/developers`).
+name: System paths guard
+
+on:
+  pull_request:
+    paths:
+      - 'templates/system/**'
+      - '.github/CODEOWNERS'
+      - '.github/workflows/system-paths-guard.yml'
+      - 'scripts/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify author is a gen0sec org member
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          echo "PR author: ${PR_AUTHOR}"
+          # 204 = member, 302 = not a public member but token lacks read:org,
+          # 404 = not a member. We treat anything other than 204 as not-member.
+          status=$(gh api -i "orgs/gen0sec/members/${PR_AUTHOR}" 2>/dev/null \
+                    | head -n1 | awk '{print $2}' || true)
+          if [ "${status}" = "204" ]; then
+            echo "::notice::${PR_AUTHOR} is a gen0sec org member — allowed."
+            exit 0
+          fi
+          echo "::error::This PR modifies a protected path (templates/system/, scripts/, or .github/) but the author (${PR_AUTHOR}) is not a public member of the gen0sec org. Move your template to templates/custom/ instead, or ask a maintainer to take over the PR."
+          exit 1
