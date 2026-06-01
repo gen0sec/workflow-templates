@@ -1,0 +1,13 @@
+name: "Promote rules"
+description: "Promote rule changes from a source workspace into a target workspace, gated on a human approval. Operators wire source + target + the email-or-Slack channel that should receive the approval prompt; the workflow waits up to 30 minutes for the click-through, applies the diff, and emits an audit event. Migrated from the workflow-service built-in registry — install per-tenant to keep using it after the binary stops shipping the in-Go-code copy."
+category: approvals
+version: "1.0.0"
+screenshot: null
+author:
+  kind: gen0sec
+  name: "Gen0Sec"
+tags:
+  - rules
+  - approval
+  - cross-workspace
+  - human-in-the-loop

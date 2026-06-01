@@ -4,10 +4,13 @@
 # touches `templates/system/**` and fails the PR check status before
 # a reviewer has to notice.
 #
-# Author membership is checked against the `gen0sec` org. Org members
-# can write to system/; non-members cannot. Tightening to a smaller
-# maintainers team is a follow-up (change `org_member` to a team
-# membership lookup against `@gen0sec/developers`).
+# Author permission is checked against the repo's collaborator set
+# rather than gen0sec org membership. The repo-collaborator path
+# works with the default GITHUB_TOKEN and matches the actually-relevant
+# question ("can this person merge here?") regardless of whether org
+# members have made their membership public — which most haven't, and
+# the earlier org-membership check failed every maintainer PR as a
+# result.
 name: System paths guard
 
 on:
@@ -26,20 +29,27 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify author is a gen0sec org member
+      - name: Verify author has write access to this repo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           echo "PR author: ${PR_AUTHOR}"
-          # 204 = member, 302 = not a public member but token lacks read:org,
-          # 404 = not a member. We treat anything other than 204 as not-member.
-          status=$(gh api -i "orgs/gen0sec/members/${PR_AUTHOR}" 2>/dev/null \
-                    | head -n1 | awk '{print $2}' || true)
-          if [ "${status}" = "204" ]; then
-            echo "::notice::${PR_AUTHOR} is a gen0sec org member — allowed."
-            exit 0
-          fi
-          echo "::error::This PR modifies a protected path (templates/system/, scripts/, or .github/) but the author (${PR_AUTHOR}) is not a public member of the gen0sec org. Move your template to templates/custom/ instead, or ask a maintainer to take over the PR."
+          # GitHub's collaborator-permission endpoint returns one of
+          # admin / maintain / write / triage / read. Anything at write
+          # or above gets to touch system paths; triage/read does not.
+          # This works for org members (whether their membership is
+          # public or not) and explicitly-added outside collaborators.
+          perm=$(gh api "repos/${REPO}/collaborators/${PR_AUTHOR}/permission" \
+                   --jq '.permission' 2>/dev/null || echo "none")
+          echo "permission: ${perm}"
+          case "${perm}" in
+            admin|maintain|write)
+              echo "::notice::${PR_AUTHOR} has ${perm} access — allowed."
+              exit 0
+              ;;
+          esac
+          echo "::error::This PR modifies a protected path (templates/system/, scripts/, or .github/) but the author (${PR_AUTHOR}) lacks write access to ${REPO}. Move your template to templates/custom/ instead, or ask a maintainer to take over the PR."
           exit 1
