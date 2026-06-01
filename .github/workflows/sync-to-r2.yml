@@ -72,46 +72,49 @@ jobs:
         run: echo "PR build — manifest valid, not uploading."
 
       # ----- main publish below this point -----
+      #
+      # Auth model: a single Cloudflare API token with "Workers R2
+      # Storage: Edit" permission, scoped to this repo's bucket. The
+      # AK/SK pair the AWS-CLI / S3-compatible path needs was too
+      # error-prone in practice — see the rename-to-g0s-prefix change
+      # in workflow-ui's wrangler.jsonc for the operational backstory.
+      # The Cloudflare API token format is the same one `wrangler r2
+      # bucket create` used to make the bucket, so the auth path is
+      # already proven for this repo.
 
-      # GitHub Actions doesn't allow `secrets.X` in `if:` expressions,
-      # so we expose the account id as an env var and check it in a
-      # gating step. Missing R2_* secrets emit a warning (visible in
-      # the run summary) instead of failing CI — a fresh clone of
-      # this repo, or a rotation in progress, shouldn't paint the
-      # branch red.
-      - name: Check R2 secrets
+      - name: Check Cloudflare secrets
         if: github.event_name != 'pull_request'
-        id: r2_secrets
+        id: cf_secrets
         env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] \
+              || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] \
+              || [ -z "${R2_BUCKET:-}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=R2 secrets not configured::Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET under Settings -> Secrets and variables -> Actions. Validate + manifest build ran; upload skipped."
+            echo "::warning title=Cloudflare secrets not configured::Set CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, and R2_BUCKET under Settings -> Secrets and variables -> Actions. Validate + manifest build ran; upload skipped."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Configure AWS CLI for R2
-        if: github.event_name != 'pull_request' && steps.r2_secrets.outputs.configured == 'true'
+      - name: Upload templates + manifest to R2 (wrangler)
+        if: github.event_name != 'pull_request' && steps.cf_secrets.outputs.configured == 'true'
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        run: |
-          aws configure set region auto
-          aws configure set s3.signature_version s3v4
-          aws --version
-
-      - name: Upload templates + manifest to R2
-        if: github.event_name != 'pull_request' && steps.r2_secrets.outputs.configured == 'true'
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          # wrangler picks these two env vars up automatically; no
+          # `wrangler.toml` needed for one-off `r2 object` calls.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           set -euo pipefail
+
+          # Pin to wrangler 4.x — same major as the local dev tooling.
+          # `--remote` is critical: without it, wrangler writes to a
+          # local emulation bucket and the publish silently no-ops.
+          WRANGLER='npx -y wrangler@^4 r2 object put'
+          echo "Using $(npx -y wrangler@^4 --version)"
 
           # Upload every template definition first so the manifest
           # never points at a missing object. R2 has no multi-object
@@ -119,31 +122,28 @@ jobs:
           # (manifest-not-yet-uploaded means the BFF reads the
           # previous manifest version + previous objects).
           for f in $(jq -r '.templates[].definition_path' manifest.json); do
-            content_type=application/json
-            aws s3 cp "$f" "s3://${R2_BUCKET}/${f}" \
-              --endpoint-url "${R2_ENDPOINT}" \
-              --content-type "$content_type" \
-              --metadata-directive REPLACE
+            $WRANGLER "${R2_BUCKET}/${f}" \
+              --file="$f" \
+              --content-type=application/json \
+              --remote
           done
 
           # Upload screenshots (when present) — same idea.
           for s in $(jq -r '.templates[] | select(.screenshot_path != null) | .screenshot_path' manifest.json); do
             if [ -f "$s" ]; then
               ext="${s##*.}"
-              aws s3 cp "$s" "s3://${R2_BUCKET}/${s}" \
-                --endpoint-url "${R2_ENDPOINT}" \
-                --content-type "image/${ext}" \
-                --metadata-directive REPLACE
+              $WRANGLER "${R2_BUCKET}/${s}" \
+                --file="$s" \
+                --content-type="image/${ext}" \
+                --remote
             fi
           done
 
           # Finally the manifest. The BFF's 60s in-memory cache will
-          # pick this up automatically. cache-control immutable would
-          # be wrong (we overwrite manifest.json every publish) so
-          # let R2's default ETag handle conditional GETs.
-          aws s3 cp manifest.json "s3://${R2_BUCKET}/manifest.json" \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --content-type application/json \
-            --metadata-directive REPLACE
+          # pick this up automatically.
+          $WRANGLER "${R2_BUCKET}/manifest.json" \
+            --file=manifest.json \
+            --content-type=application/json \
+            --remote
 
           echo "Published manifest version $(jq -r .version manifest.json) — $(jq -r '.templates | length' manifest.json) templates"
