@@ -1,0 +1,30 @@
+{
+  "name": "approval-default",
+  "description": "Single email-based approval gate. Installer supplies the action, target, reason, and approver email; the workflow waits up to 30 minutes for the click-through then completes with the recorded decision.",
+  "inputs": [
+    { "name": "action",         "type": "string", "default": "" },
+    { "name": "target",         "type": "string", "default": "" },
+    { "name": "reason",         "type": "string", "default": "" },
+    { "name": "approver_email", "type": "string", "default": "" }
+  ],
+  "steps": [
+    {
+      "name": "ask",
+      "activity": "approval.gate",
+      "parameters": {
+        "timeout_sec": 1800,
+        "channels": [
+          {
+            "kind": "email",
+            "to":   "${inputs.approver_email}",
+            "body_mrkdwn": "${template.approval.generic}"
+          }
+        ]
+      },
+      "store": "approval"
+    }
+  ],
+  "outputs": [
+    { "name": "approval", "variable": "approval" }
+  ]
+}

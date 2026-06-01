@@ -1,0 +1,26 @@
+{
+  "version": 0,
+  "generated_at": "2026-06-01T12:07:45Z",
+  "templates": [
+    {
+      "id": "approval-default",
+      "name": "Default approval",
+      "description": "Single email-based approval gate using the platform's generic mrkdwn body. Drop-in choice for any \"ask the human before doing the thing\" workflow — replace the inputs with the action you're gating.",
+      "tier": "system",
+      "category": "approvals",
+      "version": "1.0.0",
+      "definition_path": "templates/system/approval-default.json",
+      "definition_sha256": "7a6b8bb322b279caac6eb3cc55b734730b5f8f62a5b0ab5aa6ca1ba8139bf42d",
+      "screenshot_path": null,
+      "author": {
+        "kind": "gen0sec",
+        "name": "Gen0Sec"
+      },
+      "tags": [
+        "approval",
+        "email",
+        "human-in-the-loop"
+      ]
+    }
+  ]
+}

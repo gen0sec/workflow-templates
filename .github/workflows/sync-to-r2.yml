@@ -1,0 +1,129 @@
+name: Validate + sync to R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "templates/**"
+      - "scripts/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/sync-to-r2.yml"
+  pull_request:
+    paths:
+      - "templates/**"
+      - "scripts/**"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+# Single concurrency group on the main publish so two pushes don't
+# race each other into R2 with stale manifests. PRs run independently.
+concurrency:
+  group: sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # build-manifest derives the version from the commit count
+          # on this branch — needs full history.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Resolve manifest version from git history
+        id: ver
+        run: |
+          v=$(git rev-list --count HEAD)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Validate templates + build manifest
+        env:
+          MANIFEST_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          go run ./scripts/build-manifest
+          echo "---"
+          jq '{version, templates: [.templates[] | {id, tier, version, definition_sha256}]}' manifest.json
+
+      - name: Sanity — every template parses + sha256 matches
+        run: |
+          set -euo pipefail
+          jq -r '.templates[] | "\(.definition_path) \(.definition_sha256)"' manifest.json |
+          while read -r path want; do
+            got=$(sha256sum "$path" | awk '{print $1}')
+            if [ "$got" != "$want" ]; then
+              echo "SHA mismatch for $path: manifest=$want, computed=$got"
+              exit 1
+            fi
+          done
+
+      # PR runs stop here — validation only. main pushes upload.
+      - name: Skip upload on PRs
+        if: github.event_name == 'pull_request'
+        run: echo "PR build — manifest valid, not uploading."
+
+      # ----- main publish below this point -----
+
+      - name: Configure AWS CLI for R2
+        if: github.event_name != 'pull_request'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set region auto
+          aws configure set s3.signature_version s3v4
+          aws --version
+
+      - name: Upload templates + manifest to R2
+        if: github.event_name != 'pull_request'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # Upload every template definition first so the manifest
+          # never points at a missing object. R2 has no multi-object
+          # atomicity; this ordering keeps a partial publish coherent
+          # (manifest-not-yet-uploaded means the BFF reads the
+          # previous manifest version + previous objects).
+          for f in $(jq -r '.templates[].definition_path' manifest.json); do
+            content_type=application/json
+            aws s3 cp "$f" "s3://${R2_BUCKET}/${f}" \
+              --endpoint-url "${R2_ENDPOINT}" \
+              --content-type "$content_type" \
+              --metadata-directive REPLACE
+          done
+
+          # Upload screenshots (when present) — same idea.
+          for s in $(jq -r '.templates[] | select(.screenshot_path != null) | .screenshot_path' manifest.json); do
+            if [ -f "$s" ]; then
+              ext="${s##*.}"
+              aws s3 cp "$s" "s3://${R2_BUCKET}/${s}" \
+                --endpoint-url "${R2_ENDPOINT}" \
+                --content-type "image/${ext}" \
+                --metadata-directive REPLACE
+            fi
+          done
+
+          # Finally the manifest. The BFF's 60s in-memory cache will
+          # pick this up automatically. cache-control immutable would
+          # be wrong (we overwrite manifest.json every publish) so
+          # let R2's default ETag handle conditional GETs.
+          aws s3 cp manifest.json "s3://${R2_BUCKET}/manifest.json" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --content-type application/json \
+            --metadata-directive REPLACE
+
+          echo "Published manifest version $(jq -r .version manifest.json) — $(jq -r '.templates | length' manifest.json) templates"
