@@ -1,0 +1,12 @@
+name: "Smoke test"
+description: "Single-step print workflow that proves the engine substrate works end-to-end (Kafka trigger -> queue -> worker -> checkpoint -> complete). Install in a fresh tenant after a deploy or schema change to verify wiring; tear down after."
+category: misc
+version: "1.0.0"
+screenshot: null
+author:
+  kind: gen0sec
+  name: "Gen0Sec"
+tags:
+  - smoke
+  - test
+  - canary

@@ -1,6 +1,6 @@
 {
   "version": 0,
-  "generated_at": "2026-06-01T12:07:45Z",
+  "generated_at": "2026-06-01T13:12:02Z",
   "templates": [
     {
       "id": "approval-default",
@@ -20,6 +20,26 @@
         "approval",
         "email",
         "human-in-the-loop"
+      ]
+    },
+    {
+      "id": "smoke",
+      "name": "Smoke test",
+      "description": "Single-step print workflow that proves the engine substrate works end-to-end (Kafka trigger -\u003e queue -\u003e worker -\u003e checkpoint -\u003e complete). Install in a fresh tenant after a deploy or schema change to verify wiring; tear down after.",
+      "tier": "system",
+      "category": "misc",
+      "version": "1.0.0",
+      "definition_path": "templates/system/smoke.json",
+      "definition_sha256": "30d7572966ed559740415f5fce757d0eae88d7b9ec6ba6cca2df5fe138d3b9a5",
+      "screenshot_path": null,
+      "author": {
+        "kind": "gen0sec",
+        "name": "Gen0Sec"
+      },
+      "tags": [
+        "smoke",
+        "test",
+        "canary"
       ]
     }
   ]

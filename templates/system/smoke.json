@@ -1,0 +1,23 @@
+{
+  "name": "smoke",
+  "description": "Substrate smoke test — prints its inputs and completes. Use this to verify the engine substrate (Kafka -> queue -> worker -> checkpoint -> complete) end-to-end after a deploy or schema change. Replaces the in-Go-code built-in of the same name (retired 2026-06-01).",
+  "inputs": [
+    { "name": "org_id",       "type": "string", "default": "" },
+    { "name": "workspace_id", "type": "string", "default": "" },
+    { "name": "tick_id",      "type": "string", "default": "" },
+    { "name": "message",      "type": "string", "default": "smoke ok" }
+  ],
+  "steps": [
+    {
+      "name": "say",
+      "activity": "print",
+      "parameters": {
+        "message": "smoke run org=${inputs.org_id} ws=${inputs.workspace_id} tick=${inputs.tick_id} msg=${inputs.message}"
+      },
+      "store": "printed"
+    }
+  ],
+  "outputs": [
+    { "name": "printed", "variable": "printed" }
+  ]
+}
