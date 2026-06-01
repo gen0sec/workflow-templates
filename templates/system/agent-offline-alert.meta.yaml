@@ -1,0 +1,14 @@
+name: "Agent offline alert"
+description: "Records an alert in the Alerts dashboard and emails the org's alert recipient (${variables.alert_email}) when a Synapse agent stops reporting. Triggered by the platform's monitor.alert.agent_offline Kafka topic; pairs with the global renotify-sweeper for reminder cadence. Migrated from the workflow-service built-in registry — install per-tenant to keep getting agent-offline alerts after the binary stops shipping the in-Go-code copy. Requires the tenant variable `alert_email` to be set."
+category: notify
+version: "1.0.0"
+screenshot: null
+author:
+  kind: gen0sec
+  name: "Gen0Sec"
+tags:
+  - synapse
+  - alert
+  - email
+  - monitoring
+  - kafka
