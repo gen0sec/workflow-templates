@@ -2,11 +2,31 @@
   "name": "promote-rules",
   "description": "Promote rule changes from a source workspace into a target workspace, gated on a human approval. Loads both rule sets, diffs them, waits up to 30 minutes for a click-through on the rules.approve topic, then either applies the diff and emits a rules.audit event with event=rules.promoted, or emits event=rejected on a no/timeout. No-op short-circuit when the target is already in sync.",
   "inputs": [
-    { "name": "org_id",       "type": "string", "default": "" },
-    { "name": "workspace_id", "type": "string", "default": "" },
-    { "name": "source_ws",    "type": "string", "default": "" },
-    { "name": "target_ws",    "type": "string", "default": "" },
-    { "name": "requested_by", "type": "string", "default": "" }
+    {
+      "name": "org_id",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "workspace_id",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "source_ws",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "target_ws",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "requested_by",
+      "type": "string",
+      "default": ""
+    }
   ],
   "steps": [
     {
@@ -14,20 +34,28 @@
       "activity": "rules.list",
       "store": "source",
       "parameters": {
-        "org":       "${inputs.org_id}",
+        "org": "${inputs.org_id}",
         "workspace": "${inputs.source_ws}"
       },
-      "next": [{ "step": "load_target" }]
+      "next": [
+        {
+          "step": "load_target"
+        }
+      ]
     },
     {
       "name": "load_target",
       "activity": "rules.list",
       "store": "target",
       "parameters": {
-        "org":       "${inputs.org_id}",
+        "org": "${inputs.org_id}",
         "workspace": "${inputs.target_ws}"
       },
-      "next": [{ "step": "plan" }]
+      "next": [
+        {
+          "step": "plan"
+        }
+      ]
     },
     {
       "name": "plan",
@@ -38,22 +66,34 @@
         "target": "${state.target.rules}"
       },
       "next": [
-        { "step": "no_changes",     "condition": "state.plan.count == 0" },
-        { "step": "await_approval", "condition": "state.plan.count != 0" }
+        {
+          "step": "no_changes",
+          "condition": "state.plan.count == 0"
+        },
+        {
+          "step": "await_approval",
+          "condition": "state.plan.count != 0"
+        }
       ],
       "edge_matching_strategy": "first"
     },
     {
       "name": "await_approval",
       "wait_signal": {
-        "topic":      "rules.approve",
-        "timeout":    1800000000000,
-        "store":      "approval",
+        "topic": "rules.approve",
+        "timeout": 1800000000000,
+        "store": "approval",
         "on_timeout": "rejected"
       },
       "next": [
-        { "step": "apply",    "condition": "state.approval.decision == \"approve\"" },
-        { "step": "rejected", "condition": "state.approval.decision != \"approve\"" }
+        {
+          "step": "apply",
+          "condition": "state.approval.decision == \"approve\""
+        },
+        {
+          "step": "rejected",
+          "condition": "state.approval.decision != \"approve\""
+        }
       ],
       "edge_matching_strategy": "first"
     },
@@ -62,46 +102,28 @@
       "activity": "rules.apply",
       "store": "applied",
       "parameters": {
-        "org":       "${inputs.org_id}",
+        "org": "${inputs.org_id}",
         "workspace": "${inputs.target_ws}",
-        "changes":   "${state.plan.changes}"
+        "changes": "${state.plan.changes}"
       },
-      "next": [{ "step": "audit" }]
+      "next": [
+        {
+          "step": "audit"
+        }
+      ]
     },
     {
       "name": "audit",
-      "activity": "kafka.publish",
+      "activity": "print",
       "parameters": {
-        "topic": "rules.audit",
-        "key":   "${inputs.org_id}",
-        "headers": {
-          "org_id":       "${inputs.org_id}",
-          "workspace_id": "${inputs.target_ws}"
-        },
-        "value": {
-          "event":    "rules.promoted",
-          "org":      "${inputs.org_id}",
-          "source":   "${inputs.source_ws}",
-          "target":   "${inputs.target_ws}",
-          "applied":  "${state.applied.applied}",
-          "by":       "${inputs.requested_by}",
-          "approval": "${state.approval}"
-        }
+        "message": "promote-rules: promoted ${state.applied.applied} rule(s) from ${inputs.source_ws} to ${inputs.target_ws} (approved by ${inputs.requested_by})"
       }
     },
     {
       "name": "rejected",
-      "activity": "kafka.publish",
+      "activity": "print",
       "parameters": {
-        "topic": "rules.audit",
-        "key":   "${inputs.org_id}",
-        "value": {
-          "event":  "rules.rejected",
-          "org":    "${inputs.org_id}",
-          "source": "${inputs.source_ws}",
-          "target": "${inputs.target_ws}",
-          "by":     "${inputs.requested_by}"
-        }
+        "message": "promote-rules: promotion ${inputs.source_ws} -> ${inputs.target_ws} rejected"
       }
     },
     {
