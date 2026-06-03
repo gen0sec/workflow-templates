@@ -16,18 +16,9 @@
       "type": "string"
     },
     {
-      "name": "agent_id",
-      "type": "string"
-    },
-    {
-      "name": "hostname",
-      "type": "string",
-      "default": ""
-    },
-    {
-      "name": "last_seen",
-      "type": "string",
-      "default": ""
+      "name": "event",
+      "type": "object",
+      "default": {}
     }
   ],
   "steps": [
@@ -36,16 +27,16 @@
       "activity": "alert.dedupe",
       "store": "dedupe",
       "parameters": {
-        "alert_key": "agent_offline:${inputs.agent_id}:${inputs.workspace_id}",
+        "alert_key": "agent_offline:${inputs.event.agent_id}:${inputs.workspace_id}",
         "org_id": "${inputs.org_id}",
         "workspace_id": "${inputs.workspace_id}",
         "workflow": "agent-offline-alert",
         "domain_event": "agent_offline",
         "severity": "critical",
         "subject": {
-          "agent_id": "${inputs.agent_id}",
-          "hostname": "${inputs.hostname}",
-          "last_seen": "${inputs.last_seen}"
+          "agent_id": "${inputs.event.agent_id}",
+          "hostname": "${inputs.event.hostname}",
+          "last_seen": "${inputs.event.last_seen}"
         },
         "renotify_secs": 1800
       },
@@ -70,7 +61,7 @@
           {
             "kind": "email",
             "to": "${variables.alert_email}",
-            "body_mrkdwn": "Synapse on *${inputs.hostname}* (`${inputs.agent_id}`) in workspace `${inputs.workspace_id}` stopped reporting at *${inputs.last_seen}*.\n\nIf this is unexpected, check the host's network connectivity and the Synapse service status. `systemctl status synapse` is the fastest first probe."
+            "body_mrkdwn": "Synapse on *${inputs.event.hostname}* (`${inputs.event.agent_id}`) in workspace `${inputs.workspace_id}` stopped reporting at *${inputs.event.last_seen}*.\n\nIf this is unexpected, check the host's network connectivity and the Synapse service status. `systemctl status synapse` is the fastest first probe."
           }
         ],
         "choices": [
@@ -96,7 +87,7 @@
       "activity": "print",
       "store": "acked",
       "parameters": {
-        "message": "agent-offline acknowledged for ${inputs.hostname} (${inputs.agent_id})"
+        "message": "agent-offline acknowledged for ${inputs.event.hostname} (${inputs.event.agent_id})"
       }
     },
     {
@@ -104,7 +95,7 @@
       "activity": "print",
       "store": "unacked",
       "parameters": {
-        "message": "agent-offline UNACKNOWLEDGED after 4h of waiting for ${inputs.hostname} (${inputs.agent_id})"
+        "message": "agent-offline UNACKNOWLEDGED after 4h of waiting for ${inputs.event.hostname} (${inputs.event.agent_id})"
       }
     },
     {
@@ -112,7 +103,7 @@
       "activity": "print",
       "store": "suppressed",
       "parameters": {
-        "message": "agent-offline alert suppressed by dedupe (already published within renotify window) for ${inputs.hostname} (${inputs.agent_id})"
+        "message": "agent-offline alert suppressed by dedupe (already published within renotify window) for ${inputs.event.hostname} (${inputs.event.agent_id})"
       }
     }
   ]
