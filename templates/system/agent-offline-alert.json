@@ -1,12 +1,34 @@
 {
   "name": "agent-offline-alert",
   "description": "Records a monitoring.alert_state row (via alert.dedupe) and emails the org's alert recipient when a Synapse agent goes offline. Triggered by Kafka topic monitor.alert.agent_offline emitted by the platform-DB trigger notify_agent_offline. The approval.gate suspend lasts up to 4 hours; the renotify-sweeper handles reminders while the run is suspended. Duplicate events within the dedupe renotify window (30 min) are suppressed so a second notify chain never starts.",
+  "trigger": {
+    "type": "event",
+    "topic": "monitor.alert.agent_offline",
+    "scope": "workspace"
+  },
   "inputs": [
-    { "name": "org_id",       "type": "string" },
-    { "name": "workspace_id", "type": "string" },
-    { "name": "agent_id",     "type": "string" },
-    { "name": "hostname",     "type": "string", "default": "" },
-    { "name": "last_seen",    "type": "string", "default": "" }
+    {
+      "name": "org_id",
+      "type": "string"
+    },
+    {
+      "name": "workspace_id",
+      "type": "string"
+    },
+    {
+      "name": "agent_id",
+      "type": "string"
+    },
+    {
+      "name": "hostname",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "name": "last_seen",
+      "type": "string",
+      "default": ""
+    }
   ],
   "steps": [
     {
@@ -14,22 +36,28 @@
       "activity": "alert.dedupe",
       "store": "dedupe",
       "parameters": {
-        "alert_key":    "agent_offline:${inputs.agent_id}:${inputs.workspace_id}",
-        "org_id":       "${inputs.org_id}",
+        "alert_key": "agent_offline:${inputs.agent_id}:${inputs.workspace_id}",
+        "org_id": "${inputs.org_id}",
         "workspace_id": "${inputs.workspace_id}",
-        "workflow":     "agent-offline-alert",
+        "workflow": "agent-offline-alert",
         "domain_event": "agent_offline",
-        "severity":     "critical",
+        "severity": "critical",
         "subject": {
-          "agent_id":  "${inputs.agent_id}",
-          "hostname":  "${inputs.hostname}",
+          "agent_id": "${inputs.agent_id}",
+          "hostname": "${inputs.hostname}",
           "last_seen": "${inputs.last_seen}"
         },
         "renotify_secs": 1800
       },
       "next": [
-        { "step": "notify",     "condition": "state.dedupe.should_publish == true" },
-        { "step": "suppressed", "condition": "state.dedupe.should_publish == false" }
+        {
+          "step": "notify",
+          "condition": "state.dedupe.should_publish == true"
+        },
+        {
+          "step": "suppressed",
+          "condition": "state.dedupe.should_publish == false"
+        }
       ]
     },
     {
@@ -40,18 +68,27 @@
         "timeout_sec": 14400,
         "channels": [
           {
-            "kind":        "email",
-            "to":          "${variables.alert_email}",
+            "kind": "email",
+            "to": "${variables.alert_email}",
             "body_mrkdwn": "Synapse on *${inputs.hostname}* (`${inputs.agent_id}`) in workspace `${inputs.workspace_id}` stopped reporting at *${inputs.last_seen}*.\n\nIf this is unexpected, check the host's network connectivity and the Synapse service status. `systemctl status synapse` is the fastest first probe."
           }
         ],
         "choices": [
-          { "label": "Acknowledge", "decision": "ack" }
+          {
+            "label": "Acknowledge",
+            "decision": "ack"
+          }
         ]
       },
       "next": [
-        { "step": "acked",   "condition": "state.notify.decision != \"timeout\"" },
-        { "step": "unacked", "condition": "state.notify.decision == \"timeout\"" }
+        {
+          "step": "acked",
+          "condition": "state.notify.decision != \"timeout\""
+        },
+        {
+          "step": "unacked",
+          "condition": "state.notify.decision == \"timeout\""
+        }
       ]
     },
     {
