@@ -1,0 +1,14 @@
+name: "Daily security summary"
+description: "Emails each workspace a daily summary of blocked traffic — total blocks (with day-over-day trend), breakdown by action, top WAF rules, top source countries and ASNs, and unique attacker IPs. Triggered by the platform's daily_stats Kafka topic (produced by the ax_prod pg_cron job daily_block_stats() via pg_net + the Kafka bridge). Renders with data.template and sends via resend.email. Install per-tenant and set the variable `email_recipients` (comma-separated) to choose who receives it."
+category: notify
+version: "1.0.0"
+screenshot: null
+author:
+  kind: gen0sec
+  name: "Gen0Sec"
+tags:
+  - digest
+  - email
+  - report
+  - waf
+  - kafka
