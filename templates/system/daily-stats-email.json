@@ -1,6 +1,6 @@
 {
   "name": "daily-stats-email",
-  "description": "Emails each workspace its daily block summary. Triggered by the daily_stats Kafka topic, produced by the ax_prod pg_cron job daily_block_stats() (pg_net -> Kafka Bridge). Renders the stats (totals, by-action, top rules/countries/ASNs, unique IPs, day-over-day) with data.template and sends via resend.email to ${variables.email_recipients}. Install per-tenant and set the email_recipients variable.",
+  "description": "Emails each workspace its daily summary of blocked traffic (totals + day-over-day, by-action, top rules/countries/ASNs, unique IPs). Triggered by the daily_stats Kafka topic from the ax_prod pg_cron job daily_block_stats(). Renders with data.template and sends via resend.email to ${variables.email_recipients}. Install per-tenant and set email_recipients.",
   "trigger": {
     "type": "event",
     "topic": "daily_stats",
@@ -29,7 +29,7 @@
       "parameters": {
         "format": "html",
         "data": "${inputs.event}",
-        "template": "<h2>Daily security summary — {{.date}}</h2>\n<p><strong>{{printf \"%.0f\" .total}}</strong> requests blocked yesterday (previous day: {{printf \"%.0f\" .total_prev}}).</p>\n<p>By action: {{range $k, $v := .by_action}}{{$k}} {{printf \"%.0f\" $v}}; {{end}}</p>\n<p>Unique source IPs: <strong>{{printf \"%.0f\" .unique_ips}}</strong></p>\n<h3>Top rules</h3>\n<ul>{{range .top_rules}}<li>{{.name}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n<h3>Top countries</h3>\n<ul>{{range .top_countries}}<li>{{.country}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n<h3>Top networks (ASN)</h3>\n<ul>{{range .top_asns}}<li>AS{{printf \"%.0f\" .asn}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n"
+        "template": "<p><strong>{{printf \"%.0f\" .total}}</strong> requests blocked yesterday (previous day: {{printf \"%.0f\" .total_prev}}).</p>\n<p>By action: {{range $k, $v := .by_action}}{{$k}} {{printf \"%.0f\" $v}}; {{end}}</p>\n<p>Unique source IPs: <strong>{{printf \"%.0f\" .unique_ips}}</strong></p>\n<h3>Top rules</h3>\n<ul>{{range .top_rules}}<li>{{.name}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n<h3>Top countries</h3>\n<ul>{{range .top_countries}}<li>{{.country}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n<h3>Top networks (ASN)</h3>\n<ul>{{range .top_asns}}<li>AS{{printf \"%.0f\" .asn}} — {{printf \"%.0f\" .events}}</li>{{end}}</ul>\n"
       },
       "next": [
         {
@@ -45,7 +45,7 @@
         "to": "${variables.email_recipients}",
         "subject": "Your daily security summary — ${inputs.event.date}",
         "template": "branded",
-        "title": "Daily security summary",
+        "title": "Daily security summary — ${inputs.event.date}",
         "html": "${state.render.result}"
       }
     }
