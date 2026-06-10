@@ -1,0 +1,38 @@
+{
+  "name": "renotify-email",
+  "description": "Sends a reminder email to ${variables.alert_email} for a suspended run still awaiting acknowledgement. Triggered by the renotify Kafka topic produced by the workflow_prod TimescaleDB job renotify_sweep (which owns the cadence + per-run throttle). Install per-tenant; set alert_email.",
+  "trigger": {
+    "type": "event",
+    "topic": "renotify",
+    "scope": "workspace"
+  },
+  "inputs": [
+    {
+      "name": "org_id",
+      "type": "string"
+    },
+    {
+      "name": "workspace_id",
+      "type": "string"
+    },
+    {
+      "name": "event",
+      "type": "object",
+      "default": {}
+    }
+  ],
+  "steps": [
+    {
+      "name": "send",
+      "activity": "resend.email",
+      "store": "send",
+      "parameters": {
+        "to": "${variables.alert_email}",
+        "subject": "Reminder: an alert is still unacknowledged",
+        "template": "branded",
+        "title": "Reminder: unacknowledged alert",
+        "html": "<p>A <strong>${inputs.event.workflow_type}</strong> alert in your workspace is still <strong>unacknowledged</strong> (reminder #${inputs.event.reminder_number}).</p><p>Open your Gen0Sec dashboard to review and acknowledge it.</p>"
+      }
+    }
+  ]
+}
