@@ -61,7 +61,8 @@
           {
             "kind": "email",
             "to": "${variables.alert_email}",
-            "body_mrkdwn": "Synapse on *${inputs.event.hostname}* (`${inputs.event.agent_id}`) in workspace `${inputs.workspace_id}` stopped reporting at *${inputs.event.last_seen}*.\n\nIf this is unexpected, check the host's network connectivity and the Synapse service status. `systemctl status synapse` is the fastest first probe."
+            "body_mrkdwn": "Synapse on *${inputs.event.hostname}* (`${inputs.event.agent_id}`) in workspace `${inputs.workspace_id}` stopped reporting at *${inputs.event.last_seen}*.\n\nIf this is unexpected, check the host's network connectivity and the Synapse service status. `systemctl status synapse` is the fastest first probe.",
+            "title": "Synapse agent offline"
           }
         ],
         "choices": [
